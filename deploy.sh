@@ -2,21 +2,25 @@
 
 echo "🚀 Deploying Device Monitor Frontend to Vercel..."
 
-# Set colors for output
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 RED='\033[0;31m'
-NC='\033[0m' # No Color
+NC='\033[0m'
 
-# Check if Vercel CLI is installed
-if ! command -v vercel &> /dev/null; then
-    echo -e "${YELLOW}Vercel CLI not found. Installing...${NC}"
-    npm install -g vercel
+# Check Node.js version
+NODE_VERSION=$(node -v | cut -d'v' -f2)
+if [[ $(echo "$NODE_VERSION 18.0.0" | tr " " "\n" | sort -V | head -n1) != "18.0.0" ]]; then
+    echo -e "${RED}Node.js version 18+ required. Current: $NODE_VERSION${NC}"
+    exit 1
 fi
 
 # Install dependencies
 echo -e "${GREEN}Installing dependencies...${NC}"
-npm install
+npm ci --production=false
+
+# Run type checking
+echo -e "${GREEN}Running type checking...${NC}"
+npm run type-check
 
 # Run linting
 echo -e "${GREEN}Running linting...${NC}"
@@ -26,7 +30,6 @@ npm run lint
 echo -e "${GREEN}Building project...${NC}"
 npm run build
 
-# Check if build was successful
 if [ $? -eq 0 ]; then
     echo -e "${GREEN}Build successful!${NC}"
 else
@@ -34,17 +37,10 @@ else
     exit 1
 fi
 
-# Set environment variables if not set
-if [ -z "$NEXT_PUBLIC_API_URL" ]; then
-    echo -e "${YELLOW}NEXT_PUBLIC_API_URL not set. Please enter your backend URL:${NC}"
-    read API_URL
-    vercel env add NEXT_PUBLIC_API_URL production <<< $API_URL
-fi
-
-if [ -z "$NEXT_PUBLIC_WS_URL" ]; then
-    echo -e "${YELLOW}NEXT_PUBLIC_WS_URL not set. Please enter your WebSocket URL:${NC}"
-    read WS_URL
-    vercel env add NEXT_PUBLIC_WS_URL production <<< $WS_URL
+# Check if Vercel CLI is installed
+if ! command -v vercel &> /dev/null; then
+    echo -e "${YELLOW}Installing Vercel CLI...${NC}"
+    npm install -g vercel
 fi
 
 # Deploy to Vercel
@@ -53,6 +49,7 @@ vercel --prod
 
 if [ $? -eq 0 ]; then
     echo -e "${GREEN}✅ Deployment successful!${NC}"
+    echo -e "${GREEN}🌐 Your app is live at: https://${VERCEL_PROJECT_NAME}.vercel.app${NC}"
 else
     echo -e "${RED}❌ Deployment failed!${NC}"
     exit 1

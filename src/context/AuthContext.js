@@ -1,9 +1,10 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import { useRouter } from 'next/router';
+'use client';
+
+import { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
 import axios from 'axios';
 import { jwtDecode } from 'jwt-decode';
 import toast from 'react-hot-toast';
-import { setAuthToken, removeAuthToken, getAuthToken } from '../services/auth';
 
 const AuthContext = createContext();
 
@@ -21,7 +22,6 @@ export const AuthProvider = ({ children }) => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const router = useRouter();
 
-  // Check token expiration
   const isTokenExpired = (token) => {
     try {
       const decoded = jwtDecode(token);
@@ -31,7 +31,6 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  // Refresh token
   const refreshToken = useCallback(async () => {
     try {
       const refreshToken = localStorage.getItem('refreshToken');
@@ -44,39 +43,44 @@ export const AuthProvider = ({ children }) => {
       });
 
       const { accessToken, refreshToken: newRefreshToken } = response.data;
-      setAuthToken(accessToken);
+      localStorage.setItem('token', accessToken);
       localStorage.setItem('refreshToken', newRefreshToken);
+      
+      axios.defaults.headers.common['Authorization'] = `Bearer ${accessToken}`;
       
       return accessToken;
     } catch (error) {
+      console.error('Refresh token error:', error);
       logout();
       return null;
     }
   }, []);
 
-  // Load user from token
   const loadUser = useCallback(async () => {
     try {
-      const token = getAuthToken();
+      let token = localStorage.getItem('token');
+      
       if (!token || isTokenExpired(token)) {
-        const newToken = await refreshToken();
-        if (!newToken) {
+        token = await refreshToken();
+        if (!token) {
           throw new Error('Token expired');
         }
       }
 
+      axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+      
       const response = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/api/v1/auth/me`);
       setUser(response.data.user);
       setIsAuthenticated(true);
     } catch (error) {
       console.error('Load user error:', error);
-      logout();
+      setUser(null);
+      setIsAuthenticated(false);
     } finally {
       setLoading(false);
     }
   }, [refreshToken]);
 
-  // Login
   const login = async (email, password) => {
     try {
       const response = await axios.post(`${process.env.NEXT_PUBLIC_API_URL}/api/v1/auth/login`, {
@@ -86,13 +90,15 @@ export const AuthProvider = ({ children }) => {
 
       const { accessToken, refreshToken: newRefreshToken, user: userData } = response.data;
       
-      setAuthToken(accessToken);
+      localStorage.setItem('token', accessToken);
       localStorage.setItem('refreshToken', newRefreshToken);
+      axios.defaults.headers.common['Authorization'] = `Bearer ${accessToken}`;
+      
       setUser(userData);
       setIsAuthenticated(true);
       
       toast.success('Login successful!');
-      router.push('/');
+      router.push('/dashboard');
       
       return { success: true };
     } catch (error) {
@@ -102,7 +108,6 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  // Register
   const register = async (name, email, password) => {
     try {
       const response = await axios.post(`${process.env.NEXT_PUBLIC_API_URL}/api/v1/auth/register`, {
@@ -122,51 +127,21 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  // Logout
   const logout = useCallback(async () => {
     try {
       await axios.post(`${process.env.NEXT_PUBLIC_API_URL}/api/v1/auth/logout`);
     } catch (error) {
       console.error('Logout error:', error);
     } finally {
-      removeAuthToken();
+      localStorage.removeItem('token');
       localStorage.removeItem('refreshToken');
+      delete axios.defaults.headers.common['Authorization'];
       setUser(null);
       setIsAuthenticated(false);
       router.push('/login');
       toast.success('Logged out successfully');
     }
   }, [router]);
-
-  // Forgot password
-  const forgotPassword = async (email) => {
-    try {
-      await axios.post(`${process.env.NEXT_PUBLIC_API_URL}/api/v1/auth/forgot-password`, { email });
-      toast.success('Password reset email sent!');
-      return { success: true };
-    } catch (error) {
-      const message = error.response?.data?.error || 'Failed to send reset email';
-      toast.error(message);
-      return { success: false, error: message };
-    }
-  };
-
-  // Reset password
-  const resetPassword = async (token, password) => {
-    try {
-      await axios.post(`${process.env.NEXT_PUBLIC_API_URL}/api/v1/auth/reset-password`, {
-        token,
-        password,
-      });
-      toast.success('Password reset successful! Please login.');
-      router.push('/login');
-      return { success: true };
-    } catch (error) {
-      const message = error.response?.data?.error || 'Failed to reset password';
-      toast.error(message);
-      return { success: false, error: message };
-    }
-  };
 
   useEffect(() => {
     loadUser();
@@ -179,8 +154,6 @@ export const AuthProvider = ({ children }) => {
     login,
     register,
     logout,
-    forgotPassword,
-    resetPassword,
     refreshToken,
   };
 

@@ -1,18 +1,10 @@
 /** @type {import('next').NextConfig} */
-const withPWA = require('next-pwa')({
-  dest: 'public',
-  register: true,
-  skipWaiting: true,
-  disable: process.env.NODE_ENV === 'development',
-  buildExcludes: [/middleware-manifest.json$/]
-});
-
 const nextConfig = {
   reactStrictMode: true,
   swcMinify: true,
   images: {
     domains: ['avatars.githubusercontent.com', 'ui-avatars.com', 'images.unsplash.com'],
-    formats: ['image/avif', 'image/webp'],
+    unoptimized: false,
     remotePatterns: [
       {
         protocol: 'https',
@@ -20,14 +12,13 @@ const nextConfig = {
       },
     ],
   },
-  compiler: {
-    removeConsole: process.env.NODE_ENV === 'production',
-  },
   env: {
     NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL,
     NEXT_PUBLIC_WS_URL: process.env.NEXT_PUBLIC_WS_URL,
     NEXT_PUBLIC_APP_NAME: process.env.NEXT_PUBLIC_APP_NAME,
     NEXT_PUBLIC_APP_VERSION: process.env.NEXT_PUBLIC_APP_VERSION,
+    NEXT_PUBLIC_MAP_PROVIDER: process.env.NEXT_PUBLIC_MAP_PROVIDER,
+    NEXT_PUBLIC_MAP_TILE_URL: process.env.NEXT_PUBLIC_MAP_TILE_URL,
   },
   async rewrites() {
     return [
@@ -47,14 +38,6 @@ const nextConfig = {
         source: '/(.*)',
         headers: [
           {
-            key: 'X-DNS-Prefetch-Control',
-            value: 'on',
-          },
-          {
-            key: 'Strict-Transport-Security',
-            value: 'max-age=63072000; includeSubDomains; preload',
-          },
-          {
             key: 'X-Content-Type-Options',
             value: 'nosniff',
           },
@@ -70,18 +53,14 @@ const nextConfig = {
             key: 'Referrer-Policy',
             value: 'strict-origin-when-cross-origin',
           },
-          {
-            key: 'Permissions-Policy',
-            value: 'camera=(), microphone=(), geolocation=(self)',
-          },
         ],
       },
     ];
   },
-  experimental: {
-    optimizePackageImports: ['react-icons', 'recharts', 'date-fns'],
-  },
   output: 'standalone',
+  generateEtags: true,
+  poweredByHeader: false,
+  compress: true,
 };
 
-module.exports = withPWA(nextConfig);
+module.exports = nextConfig;

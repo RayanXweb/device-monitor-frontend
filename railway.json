@@ -2,12 +2,220 @@
   "$schema": "https://railway.app/railway.schema.json",
   "build": {
     "builder": "NIXPACKS",
-    "buildCommand": "npm run railway-build"
+    "buildCommand": "npm run railway-build",
+    "watchPatterns": [
+      "src/**",
+      "public/**",
+      "package.json",
+      "package-lock.json",
+      "next.config.js",
+      "tailwind.config.js",
+      "postcss.config.js"
+    ],
+    "nixpacksConfig": {
+      "setup": {
+        "nodeVersion": "20"
+      },
+      "phases": {
+        "install": {
+          "cmds": ["npm ci --only=production --no-audit --no-fund"]
+        },
+        "build": {
+          "cmds": ["npm run build"]
+        }
+      }
+    }
   },
   "deploy": {
     "numReplicas": 1,
     "restartPolicyType": "ON_FAILURE",
     "restartPolicyMaxRetries": 10,
-    "startCommand": "npm run start:railway"
+    "startCommand": "npm run start:railway",
+    "healthcheckPath": "/health",
+    "healthcheckTimeout": 100,
+    "healthcheckInterval": 30,
+    "restart": {
+      "policy": "always",
+      "maxAttempts": 3
+    },
+    "limits": {
+      "cpu": 1024,
+      "memory": 2048
+    },
+    "env": {
+      "NODE_ENV": "production",
+      "NODE_OPTIONS": "--max-old-space-size=4096"
+    }
+  },
+  "environments": {
+    "production": {
+      "build": {
+        "buildCommand": "npm run build"
+      },
+      "deploy": {
+        "numReplicas": 2,
+        "limits": {
+          "cpu": 2048,
+          "memory": 4096
+        }
+      }
+    },
+    "staging": {
+      "build": {
+        "buildCommand": "npm run build"
+      },
+      "deploy": {
+        "numReplicas": 1,
+        "limits": {
+          "cpu": 512,
+          "memory": 1024
+        }
+      }
+    },
+    "development": {
+      "build": {
+        "buildCommand": "npm run dev"
+      },
+      "deploy": {
+        "numReplicas": 1,
+        "limits": {
+          "cpu": 256,
+          "memory": 512
+        }
+      }
+    }
+  },
+  "plugins": [
+    {
+      "name": "redis",
+      "options": {
+        "version": "7"
+      }
+    },
+    {
+      "name": "postgresql",
+      "options": {
+        "version": "15"
+      }
+    }
+  ],
+  "healthchecks": {
+    "livenessProbe": {
+      "path": "/live",
+      "initialDelaySeconds": 30,
+      "periodSeconds": 10,
+      "timeoutSeconds": 5,
+      "failureThreshold": 3,
+      "successThreshold": 1
+    },
+    "readinessProbe": {
+      "path": "/ready",
+      "initialDelaySeconds": 10,
+      "periodSeconds": 5,
+      "timeoutSeconds": 3,
+      "failureThreshold": 3,
+      "successThreshold": 1
+    },
+    "startupProbe": {
+      "path": "/health",
+      "initialDelaySeconds": 0,
+      "periodSeconds": 5,
+      "timeoutSeconds": 3,
+      "failureThreshold": 30,
+      "successThreshold": 1
+    }
+  },
+  "crons": [
+    {
+      "schedule": "0 0 * * *",
+      "command": "npm run cleanup",
+      "timeout": 300
+    },
+    {
+      "schedule": "*/30 * * * *",
+      "command": "npm run health-check",
+      "timeout": 60
+    }
+  ],
+  "volumes": [
+    {
+      "mountPath": "/app/.next/cache",
+      "size": "1GB"
+    },
+    {
+      "mountPath": "/app/node_modules/.cache",
+      "size": "512MB"
+    }
+  ],
+  "network": {
+    "port": 3000,
+    "protocol": "tcp"
+  },
+  "domains": [
+    {
+      "domain": "${RAILWAY_PUBLIC_DOMAIN}",
+      "type": "SYSTEM"
+    }
+  ],
+  "variables": {
+    "NODE_ENV": "production",
+    "NODE_OPTIONS": "--max-old-space-size=4096",
+    "NEXT_PUBLIC_APP_NAME": "Device Monitor Pro",
+    "NEXT_PUBLIC_APP_VERSION": "3.0.0",
+    "NEXT_PUBLIC_ENABLE_PWA": "true",
+    "NEXT_PUBLIC_ENABLE_OFFLINE_MODE": "true"
+  },
+  "secrets": [
+    "NEXTAUTH_SECRET",
+    "NEXT_PUBLIC_API_URL",
+    "NEXT_PUBLIC_WS_URL"
+  ],
+  "alerts": [
+    {
+      "name": "High Memory Usage",
+      "condition": "memory_usage > 80",
+      "severity": "warning"
+    },
+    {
+      "name": "High CPU Usage",
+      "condition": "cpu_usage > 80",
+      "severity": "warning"
+    },
+    {
+      "name": "Deployment Failed",
+      "condition": "deployment_status == 'failed'",
+      "severity": "critical"
+    }
+  ],
+  "observability": {
+    "metrics": {
+      "enabled": true,
+      "path": "/metrics"
+    },
+    "logging": {
+      "enabled": true,
+      "level": "info",
+      "retention": "7d"
+    },
+    "tracing": {
+      "enabled": false,
+      "sampleRate": 0.1
+    }
+  },
+  "backups": {
+    "enabled": true,
+    "schedule": "0 2 * * *",
+    "retention": 7
+  },
+  "autoscaling": {
+    "enabled": false,
+    "minReplicas": 1,
+    "maxReplicas": 5,
+    "targetCPUUtilization": 70,
+    "targetMemoryUtilization": 80
+  },
+  "maintenance": {
+    "enabled": false,
+    "message": "System under maintenance. Please check back later."
   }
 }
